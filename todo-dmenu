@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# Script to add & remove entries in a list of todo items using dmenu
+#
+# - To cancel, type escape
+# - To add a new todo, just enter it at the prompt. The current date/time
+#   will be appended to the name of the todo;
+# - To remove a todo, select it and press enter.
+#
+# Tasks are stored in a text file, by default ~/.todo - for all other
+# operations, edit that file directory.
+#
+# Requirements: dmenu, sed, awk, grep
+# The script can be invoked with any dmenu settings (eg. -i for case insensitivity)
+#
+
+# Path to utilities
+dmenu='/usr/bin/dmenu'
+echo_with_nl='printf %b'
+remove_empty_lines='sed /^\s*$/d'
+
+# Current time
+the_time=`date "+%F %T"`
+
+# Todo file
+todo=${HOME}/.todo-dmenu
+todo_tmp=/tmp/todo-dmenu-tmp
+
+# Build list of entries
+if [ -f "${todo}" ]
+then
+    entries=`cat "${todo}" | ${remove_empty_lines}`
+else
+    touch "${todo}"
+    entries=''
+fi
+
+# Get prompt
+enter=`${echo_with_nl} "${entries}" | ${dmenu} "$@"`
+
+# Do nothing on escape
+if [ $? -eq 1 ]
+then
+    exit 0
+fi
+
+# Test if this is an existing entry
+grep -q "^${enter}" "${todo}"
+if [ $? -eq 0 ]
+then
+    grep -v "^${enter}" "${todo}" > "${todo_tmp}"
+    mv "${todo_tmp}" "${todo}"
+else
+    echo "${enter} (${the_time})" >> "${todo}"
+fi
