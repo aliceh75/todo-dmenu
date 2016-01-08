@@ -2,13 +2,23 @@
 #
 # Script to add & remove entries in a list of todo items using dmenu
 #
-# - To cancel, type escape
-# - To add a new todo, just enter it at the prompt. The current date/time
-#   will be appended to the name of the todo;
-# - To remove a todo, select it and press enter.
+# Usage: todo-dmenu [dmenu options]
 #
-# Tasks are stored in a text file, by default ~/.todo - for all other
-# operations, edit that file directory.
+# - To cancel at any time, type escape;
+# - If environment variable TODO_LIST is set and not empty, todo-dmenu 
+#   will directly open the given todo list (the name being that of a file in the
+#   todo folder);
+# - If invoked without argument, todo-dmenu will first offer the choice of the todo
+#   list to use. Either select an existing list, or create a new one by typing it's
+#   name;
+# - Once in the todo list, you can:
+#     - Add a new todo, by entering it at the prompt. The current date/time
+#       will be appended to the name of the todo;
+#     - Remove a todo by selecting it and pressing enter.
+# - todo-dmenu remains in the todo list until esc is pressed
+#
+# Tasks are stored in text files, by default under ~/.todo-dmenu/ - anything that
+# can't be done with this tool can be done by editing the files directly.
 #
 # Requirements: dmenu, sed, awk, grep
 # The script can be invoked with any dmenu settings (eg. -i for case insensitivity)
@@ -22,34 +32,56 @@ remove_empty_lines='sed /^\s*$/d'
 # Current time
 the_time=`date "+%F %T"`
 
-# Todo file
-todo=${HOME}/.todo-dmenu
+# Todo folder
+todo_folder=${HOME}/.todo-dmenu
 todo_tmp=/tmp/todo-dmenu-tmp
 
-# Build list of entries
-if [ -f "${todo}" ]
-then
-    entries=`cat "${todo}" | ${remove_empty_lines}`
-else
+# Create the todo folder if necessary
+if [ ! -d "${todo_folder}" ]; then
+    mkdir -p "${todo_folder}"
+    if [ $? != 0 ]; then
+        echo "Failed to create todo folder in ${todo_folder}."
+        exit 1
+    fi
+fi
+
+# Invoke dmenu to get the name of the todo list
+if [ "$TODO_LIST" = "" ]; then
+    # Get name of lists
+    lists=`ls ${todo_folder}`
+    # TODO: show the number of todos in each list. Need to strip it back out though.
+    TODO_LIST=`${echo_with_nl} "${lists}" | ${dmenu} ${@}`
+    if [ $? -eq 1 ]; then
+        exit 0
+    fi
+fi
+
+todo="${todo_folder}/${TODO_LIST}"
+if [ ! -f "${todo}" ]; then
     touch "${todo}"
-    entries=''
 fi
 
-# Get prompt
-enter=`${echo_with_nl} "${entries}" | ${dmenu} "$@"`
+finished=0
+while [ "$finished" = "0" ]; do
+    # Build list of entries
+    entries=`cat "${todo}" | ${remove_empty_lines}`
 
-# Do nothing on escape
-if [ $? -eq 1 ]
-then
-    exit 0
-fi
+    # Get prompt
+    enter=`${echo_with_nl} "${entries}" | ${dmenu} ${@}`
 
-# Test if this is an existing entry
-grep -q "^${enter}" "${todo}"
-if [ $? -eq 0 ]
-then
-    grep -v "^${enter}" "${todo}" > "${todo_tmp}"
-    mv "${todo_tmp}" "${todo}"
-else
-    echo "${enter} (${the_time})" >> "${todo}"
-fi
+    # Do nothing on escape
+    if [ $? -eq 1 ]
+    then
+        exit 0
+    fi
+
+    # Test if this is an existing entry
+    grep -q "^${enter}" "${todo}"
+    if [ $? -eq 0 ]
+    then
+        grep -v "^${enter}" "${todo}" > "${todo_tmp}"
+        mv "${todo_tmp}" "${todo}"
+    else
+        echo "${enter} (${the_time})" >> "${todo}"
+    fi
+done
