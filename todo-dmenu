@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Script to add & remove entries in a list of todo items using dmenu
 #
@@ -47,13 +47,17 @@ fi
 
 # Invoke dmenu to get the name of the todo list
 if [ "$TODO_LIST" = "" ]; then
-    # Get name of lists
-    lists=`ls ${todo_folder}`
-    # TODO: show the number of todos in each list. Need to strip it back out though.
+    # Get name of lists. Only for shells that support process subsitution.
+    while IFS= read -d $'\0' -r file; do
+        list_name=`basename "${file}"`
+        todo_count=`wc -l "${file}" | cut -d' ' -f1`
+        lists="${list_name} (${todo_count})\\n${lists}"
+    done < <(find "${todo_folder}" -type f  -print0)
     TODO_LIST=`${echo_with_nl} "${lists}" | ${dmenu} ${@}`
     if [ $? -eq 1 ]; then
         exit 0
     fi
+    TODO_LIST=`echo "${TODO_LIST}" | sed 's/ ([0-9]*)$//'`
 fi
 
 todo="${todo_folder}/${TODO_LIST}"
